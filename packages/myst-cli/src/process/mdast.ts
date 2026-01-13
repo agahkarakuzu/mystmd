@@ -182,16 +182,22 @@ export async function transformMdast(
   // This needs to come before basic transformations since it may add labels to blocks
   liftCodeMetadataToBlock(session, vfile, mdast);
 
-  if (execute && !frontmatter.skip_execution) {
+  if (execute && !frontmatter.execute?.skip) {
     const cachePath = path.join(session.buildPath(), 'execute');
-    await kernelExecutionTransform(mdast, vfile, {
-      basePath: session.sourcePath(),
-      cache: new LocalDiskCache<(IExpressionResult | IOutput[])[]>(cachePath),
-      sessionFactory: () => session.jupyterSessionManager(),
-      frontmatter: frontmatter,
-      ignoreCache: false,
-      errorIsFatal: false,
-      log: session.log,
+    const fileName = path.basename(file);
+    session.log.debug(`⏳ Waiting for execution slot: ${fileName}`);
+    await session.executionSemaphore.runExclusive(async () => {
+      session.log.debug(`▶️  Executing: ${fileName}`);
+      await kernelExecutionTransform(mdast, vfile, {
+        basePath: session.sourcePath(),
+        cache: new LocalDiskCache<(IExpressionResult | IOutput[])[]>(cachePath),
+        sessionFactory: () => session.jupyterSessionManager(),
+        frontmatter: frontmatter,
+        ignoreCache: false,
+        errorIsFatal: false,
+        log: session.log,
+      });
+      session.log.debug(`✅ Completed execution: ${fileName}`);
     });
   }
 

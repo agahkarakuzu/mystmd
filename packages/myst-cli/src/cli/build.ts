@@ -17,10 +17,12 @@ import {
   makeWatchOption,
   makeCIOption,
   makeExecuteOption,
+  makeExecuteParallelOption,
   makeMaxSizeWebpOption,
   makeDOIBibOption,
   makeCffOption,
   makeKeepHostOption,
+  makePortOption,
 } from './options.js';
 import { readableName } from '../utils/whiteLabelling.js';
 
@@ -29,6 +31,7 @@ export function makeBuildCommand() {
     .description('Build PDF, LaTeX, Word and website exports from MyST files')
     .argument('[files...]', 'list of files to export')
     .addOption(makeExecuteOption('Execute Notebooks'))
+    .addOption(makeExecuteParallelOption())
     .addOption(makePdfOption('Build PDF output'))
     .addOption(makeTexOption('Build LaTeX outputs'))
     .addOption(makeTypstOption('Build Typst outputs'))
@@ -52,6 +55,7 @@ export function makeBuildCommand() {
     .addOption(makeStrictOption())
     .addOption(makeCIOption())
     .addOption(makeMaxSizeWebpOption())
-    .addOption(makeKeepHostOption());
+    .addOption(makeKeepHostOption())
+    .addOption(makePortOption());
   return command;
 }
