@@ -155,10 +155,25 @@ export async function startServer(
   );
   const port = opts?.port ?? (await getPort({ port: portNumbers(3000, 3100) }));
   const appServer = { port } as AppServer;
-  await new Promise<void>((resolve) => {
+  const THEME_SERVER_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes to start
+  await new Promise<void>((resolve, reject) => {
+    let resolved = false;
+    const done = () => {
+      if (resolved) return;
+      resolved = true;
+      resolve();
+    };
+    const fail = (reason: string) => {
+      if (resolved) return;
+      resolved = true;
+      reject(new Error(reason));
+    };
+    const timeout = setTimeout(() => {
+      fail(`Theme server did not start within ${THEME_SERVER_TIMEOUT_MS / 1000}s`);
+    }, THEME_SERVER_TIMEOUT_MS);
     const start = makeExecutable(
       mystTemplate.getValidatedTemplateYml().build?.start ?? DEFAULT_START_COMMAND,
-      createServerLogger(session, { host, ready: resolve }),
+      createServerLogger(session, { host, ready: done }),
       {
         cwd: mystTemplate.templatePath,
         env: {
@@ -169,12 +184,23 @@ export async function startServer(
           MODE: opts.buildStatic ? 'static' : 'app',
           BASE_URL: opts.baseurl || undefined,
         },
-        getProcess(process) {
-          appServer.process = process;
+        getProcess(p: child_process.ChildProcess) {
+          appServer.process = p;
+          p.on('exit', (code: number | null) => {
+            clearTimeout(timeout);
+            if (!resolved) {
+              fail(`Theme server process exited with code ${code} before becoming ready`);
+            }
+          });
         },
       },
     );
-    start().catch((e) => session.log.debug(e));
+    start()
+      .then(() => clearTimeout(timeout))
+      .catch((e: unknown) => {
+        clearTimeout(timeout);
+        fail(`Theme server failed to start: ${e}`);
+      });
   });
   appServer.stop = () => {
     killProcessTree(appServer.process);
