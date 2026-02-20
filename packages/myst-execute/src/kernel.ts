@@ -78,6 +78,21 @@ export async function executeCodeCell(kernel: Kernel.IKernelConnection, code: st
   let status: 'abort' | 'error' | 'ok' | undefined;
   future.onReply = (msg: KernelMessage.IExecuteReplyMsg) => {
     status = msg.content.status;
+    // If the reply itself carries error details (ename/evalue/traceback)
+    // and no IOPub error message was received (e.g. kernel died mid-execution),
+    // synthesize an error output so the traceback is not lost.
+    if (status === 'error') {
+      const content = msg.content as any;
+      const hasIOPubError = outputs.some((o) => o.output_type === 'error');
+      if (!hasIOPubError && (content.ename || content.evalue)) {
+        outputs.push({
+          output_type: 'error',
+          ename: content.ename ?? 'UnknownError',
+          evalue: content.evalue ?? '',
+          traceback: content.traceback ?? [`${content.ename ?? 'Error'}: ${content.evalue ?? ''}`],
+        });
+      }
+    }
   };
   await future.done;
   assert(status !== undefined);

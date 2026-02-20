@@ -45,10 +45,18 @@ export async function computeExecutableNodes(
       // Check for errors
       const allowErrors = codeBlockRaisesException(matchedNode);
       if (status === 'error' && !allowErrors) {
-        const errorMessage = outputs
+        const tracebackText = outputs
           .map((item) => item.traceback)
           .flat()
+          .filter(Boolean)
           .join('\n');
+        // Fall back to ename/evalue if traceback is empty (e.g. kernel died)
+        const errorMessage = tracebackText.trim()
+          ? tracebackText
+          : outputs
+              .filter((item) => item.output_type === 'error')
+              .map((item) => `${(item as any).ename}: ${(item as any).evalue}`)
+              .join('\n') || 'Unknown error (no traceback available)';
         fileError(
           opts.vfile,
           `An exception occurred during code execution, halting further execution:\n\n${errorMessage}`,
